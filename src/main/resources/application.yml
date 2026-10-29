@@ -6,10 +6,10 @@ spring:
     # 使用阿里的Druid连接池
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # 填写你数据库的url、登录名、密码和数据库名
-    url: jdbc:mysql://localhost:3306/vueblog?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC
-    username: root
-    password: root
+    # nas-mysql 测试连接；应用与代码生成器共用。会话时区统一为 UTC。
+    url: "jdbc:mysql://192.168.20.5:3306/marker-hub?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&sessionVariables=time_zone=%27%2B00%3A00%27"
+    username: "root"
+    password: "ssyhsup"
     druid:
       # 连接池的配置信息
       # 初始化大小，最小，最大

@@ -10,9 +10,14 @@ import com.baomidou.mybatisplus.generator.config.*;
 import com.baomidou.mybatisplus.generator.config.po.TableInfo;
 import com.baomidou.mybatisplus.generator.config.rules.NamingStrategy;
 import com.baomidou.mybatisplus.generator.engine.FreemarkerTemplateEngine;
+import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
+import org.springframework.core.env.PropertiesPropertySource;
+import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.io.ClassPathResource;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.Scanner;
 
 /**
@@ -54,13 +59,23 @@ public class CodeGenerator {
         gc.setServiceName("%sService");
         mpg.setGlobalConfig(gc);
 
+        // 与应用共用 application.yml，并允许标准 Spring 环境变量覆盖。
+        YamlPropertiesFactoryBean yaml = new YamlPropertiesFactoryBean();
+        yaml.setResources(new ClassPathResource("application.yml"));
+        Properties properties = yaml.getObject();
+        if (properties == null) {
+            throw new IllegalStateException("无法读取 application.yml 数据源配置");
+        }
+        StandardEnvironment environment = new StandardEnvironment();
+        environment.getPropertySources().addLast(new PropertiesPropertySource("application.yml", properties));
+
         // 数据源配置
         DataSourceConfig dsc = new DataSourceConfig();
-        dsc.setUrl("jdbc:mysql://localhost:3306/vueblog?useUnicode=true&useSSL=false&characterEncoding=utf8&serverTimezone=UTC");
+        dsc.setUrl(environment.getRequiredProperty("spring.datasource.url"));
         // dsc.setSchemaName("public");
-        dsc.setDriverName("com.mysql.cj.jdbc.Driver");
-        dsc.setUsername("root");
-        dsc.setPassword("root");
+        dsc.setDriverName(environment.getRequiredProperty("spring.datasource.driver-class-name"));
+        dsc.setUsername(environment.getRequiredProperty("spring.datasource.username"));
+        dsc.setPassword(environment.getRequiredProperty("spring.datasource.password"));
         mpg.setDataSource(dsc);
 
         // 包配置
