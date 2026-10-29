@@ -2,7 +2,10 @@ package com.blog.utils;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+import javax.crypto.SecretKey;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -33,24 +36,29 @@ public class JwtUtil {
         Date expireDate = new Date(nowDate.getTime() + expire * 1000);
 
         return Jwts.builder()
-                .setHeaderParam("typ", "JWT")
-                .setSubject(userId+"")
-                .setIssuedAt(nowDate)
-                .setExpiration(expireDate)
-                .signWith(SignatureAlgorithm.HS512, secret)
+                .header().type("JWT").and()
+                .subject(Long.toString(userId))
+                .issuedAt(nowDate)
+                .expiration(expireDate)
+                .signWith(signingKey(), Jwts.SIG.HS512)
                 .compact();
     }
 
     public Claims getClaimByToken(String token) {
         try {
             return Jwts.parser()
-                    .setSigningKey(secret)
-                    .parseClaimsJws(token)
-                    .getBody();
-        }catch (Exception e){
+                    .verifyWith(signingKey())
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+        }catch (JwtException | IllegalArgumentException e){
             log.debug("validate is token error ", e);
             return null;
         }
+    }
+
+    private SecretKey signingKey() {
+        return Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
     }
 
     /**

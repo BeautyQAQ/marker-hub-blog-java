@@ -2,6 +2,8 @@ package com.blog.config;
 
 import com.blog.shiro.AccountRealm;
 import com.blog.shiro.JwtFilter;
+import com.blog.shiro.JedisRedisManager;
+import com.blog.utils.JwtUtil;
 import org.apache.shiro.session.mgt.SessionManager;
 import org.apache.shiro.spring.web.ShiroFilterFactoryBean;
 import org.apache.shiro.spring.web.config.DefaultShiroFilterChainDefinition;
@@ -10,13 +12,13 @@ import org.apache.shiro.web.mgt.DefaultWebSecurityManager;
 import org.apache.shiro.web.session.mgt.DefaultWebSessionManager;
 import org.crazycake.shiro.RedisCacheManager;
 import org.crazycake.shiro.RedisSessionDAO;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import org.apache.shiro.mgt.SecurityManager;
 
-import javax.servlet.Filter;
+import jakarta.servlet.Filter;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -27,8 +29,29 @@ import java.util.Map;
  */
 @Configuration
 public class ShiroConfig {
-    @Autowired
-    private JwtFilter jwtFilter;
+    @Bean(destroyMethod = "close")
+    public JedisRedisManager redisManager(
+            @Value("${shiro-redis.redis-manager.host:127.0.0.1:6379}") String host,
+            @Value("${shiro-redis.redis-manager.password:}") String password,
+            @Value("${shiro-redis.redis-manager.database:0}") int database,
+            @Value("${shiro-redis.redis-manager.timeout:2000}") int timeout) {
+        return new JedisRedisManager(host, password, database, timeout);
+    }
+
+    @Bean
+    public RedisSessionDAO redisSessionDAO(JedisRedisManager redisManager) {
+        RedisSessionDAO dao = new RedisSessionDAO();
+        dao.setRedisManager(redisManager);
+        return dao;
+    }
+
+    @Bean
+    public RedisCacheManager redisCacheManager(JedisRedisManager redisManager) {
+        RedisCacheManager cacheManager = new RedisCacheManager();
+        cacheManager.setRedisManager(redisManager);
+        cacheManager.setPrincipalIdFieldName("id");
+        return cacheManager;
+    }
 
     @Bean
     public SessionManager sessionManager(RedisSessionDAO redisSessionDAO) {
@@ -67,12 +90,14 @@ public class ShiroConfig {
 
     @Bean("shiroFilterFactoryBean")
     public ShiroFilterFactoryBean shiroFilterFactoryBean(SecurityManager securityManager,
-                                                         ShiroFilterChainDefinition shiroFilterChainDefinition) {
+                                                         ShiroFilterChainDefinition shiroFilterChainDefinition,
+                                                         JwtUtil jwtUtil) {
         ShiroFilterFactoryBean shiroFilter = new ShiroFilterFactoryBean();
         shiroFilter.setSecurityManager(securityManager);
 
         Map<String, Filter> filters = new HashMap<>();
-        filters.put("jwt", jwtFilter);
+        // Owned by Shiro only: a separate Spring Filter bean would also be registered by Boot.
+        filters.put("jwt", new JwtFilter(jwtUtil));
         shiroFilter.setFilters(filters);
 
         Map<String, String> filterMap = shiroFilterChainDefinition.getFilterChainMap();

@@ -1,65 +1,25 @@
 package com.blog;
 
-
-import com.baomidou.mybatisplus.core.exceptions.MybatisPlusException;
-import com.baomidou.mybatisplus.core.toolkit.StringPool;
-import com.baomidou.mybatisplus.core.toolkit.StringUtils;
-import com.baomidou.mybatisplus.generator.AutoGenerator;
-import com.baomidou.mybatisplus.generator.InjectionConfig;
-import com.baomidou.mybatisplus.generator.config.*;
-import com.baomidou.mybatisplus.generator.config.po.TableInfo;
-import com.baomidou.mybatisplus.generator.config.rules.NamingStrategy;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.generator.FastAutoGenerator;
+import com.baomidou.mybatisplus.generator.config.OutputFile;
+import com.baomidou.mybatisplus.generator.config.rules.DateType;
+import com.baomidou.mybatisplus.generator.config.rules.DbColumnType;
 import com.baomidou.mybatisplus.generator.engine.FreemarkerTemplateEngine;
+import org.apache.ibatis.type.JdbcType;
 import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
 import org.springframework.core.env.PropertiesPropertySource;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.nio.file.Path;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Scanner;
 
-/**
- * 演示例子，执行 main 方法控制台输入模块表名回车自动生成对应项目目录中
- * @author SZ-UserBDG7
- */
+/** Generates sources on explicit invocation; never used as a connectivity check. */
 public class CodeGenerator {
-    /**
-     * <p>
-     * 读取控制台内容
-     * </p>
-     */
-    public static String scanner(String tip) {
-        Scanner scanner = new Scanner(System.in);
-        StringBuilder help = new StringBuilder();
-        help.append("请输入" + tip + "：");
-        System.out.println(help.toString());
-        if (scanner.hasNext()) {
-            String ipt = scanner.next();
-            if (StringUtils.isNotEmpty(ipt)) {
-                return ipt;
-            }
-        }
-        throw new MybatisPlusException("请输入正确的" + tip + "！");
-    }
-
     public static void main(String[] args) {
-        // 代码生成器
-        AutoGenerator mpg = new AutoGenerator();
-
-        // 全局配置
-        GlobalConfig gc = new GlobalConfig();
-        String projectPath = System.getProperty("user.dir");
-        gc.setOutputDir(projectPath + "/src/main/java");
-        //gc.setOutputDir("D:\\test");
-        gc.setAuthor("huangshen");
-        gc.setOpen(false);
-        // gc.setSwagger2(true); 实体属性 Swagger2 注解
-        gc.setServiceName("%sService");
-        mpg.setGlobalConfig(gc);
-
-        // 与应用共用 application.yml，并允许标准 Spring 环境变量覆盖。
         YamlPropertiesFactoryBean yaml = new YamlPropertiesFactoryBean();
         yaml.setResources(new ClassPathResource("application.yml"));
         Properties properties = yaml.getObject();
@@ -69,66 +29,34 @@ public class CodeGenerator {
         StandardEnvironment environment = new StandardEnvironment();
         environment.getPropertySources().addLast(new PropertiesPropertySource("application.yml", properties));
 
-        // 数据源配置
-        DataSourceConfig dsc = new DataSourceConfig();
-        dsc.setUrl(environment.getRequiredProperty("spring.datasource.url"));
-        // dsc.setSchemaName("public");
-        dsc.setDriverName(environment.getRequiredProperty("spring.datasource.driver-class-name"));
-        dsc.setUsername(environment.getRequiredProperty("spring.datasource.username"));
-        dsc.setPassword(environment.getRequiredProperty("spring.datasource.password"));
-        mpg.setDataSource(dsc);
-
-        // 包配置
-        PackageConfig pc = new PackageConfig();
-        pc.setModuleName(null);
-        pc.setParent("com.blog");
-        mpg.setPackageInfo(pc);
-
-        // 自定义配置
-        InjectionConfig cfg = new InjectionConfig() {
-            @Override
-            public void initMap() {
-                // to do nothing
-            }
-        };
-
-        // 如果模板引擎是 freemarker
-        String templatePath = "/templates/mapper.xml.ftl";
-        // 如果模板引擎是 velocity
-        // String templatePath = "/templates/mapper.xml.vm";
-
-        // 自定义输出配置
-        List<FileOutConfig> focList = new ArrayList<>();
-        // 自定义配置会被优先输出
-        focList.add(new FileOutConfig(templatePath) {
-            @Override
-            public String outputFile(TableInfo tableInfo) {
-                // 自定义输出文件名 ， 如果你 Entity 设置了前后缀、此处注意 xml 的名称会跟着发生变化！！
-                return projectPath + "/src/main/resources/mapper/"
-                        + "/" + tableInfo.getEntityName() + "Mapper" + StringPool.DOT_XML;
-            }
-        });
-
-        cfg.setFileOutConfigList(focList);
-        mpg.setCfg(cfg);
-
-        // 配置模板
-        TemplateConfig templateConfig = new TemplateConfig();
-
-        templateConfig.setXml(null);
-        mpg.setTemplate(templateConfig);
-
-        // 策略配置
-        StrategyConfig strategy = new StrategyConfig();
-        strategy.setNaming(NamingStrategy.underline_to_camel);
-        strategy.setColumnNaming(NamingStrategy.underline_to_camel);
-        strategy.setEntityLombokModel(true);
-        strategy.setRestControllerStyle(true);
-        strategy.setInclude(scanner("表名，多个英文逗号分割").split(","));
-        strategy.setControllerMappingHyphenStyle(true);
-        strategy.setTablePrefix("m_");
-        mpg.setStrategy(strategy);
-        mpg.setTemplateEngine(new FreemarkerTemplateEngine());
-        mpg.execute();
+        System.out.println("请输入表名，多个表名用英文逗号分隔：");
+        Scanner scanner = new Scanner(System.in);
+        if (!scanner.hasNextLine()) {
+            throw new IllegalArgumentException("请输入正确的表名");
+        }
+        String tables = scanner.nextLine().trim();
+        if (tables.isEmpty()) {
+            throw new IllegalArgumentException("请输入正确的表名");
+        }
+        Path projectPath = Path.of(System.getProperty("user.dir"));
+        FastAutoGenerator.create(
+                        environment.getRequiredProperty("spring.datasource.url"),
+                        environment.getRequiredProperty("spring.datasource.username"),
+                        environment.getRequiredProperty("spring.datasource.password"))
+                .globalConfig(builder -> builder.author("huangshen")
+                        .disableOpenDir().dateType(DateType.ONLY_DATE)
+                        .outputDir(projectPath.resolve("src/main/java").toString()))
+                .dataSourceConfig(builder -> builder.typeConvertHandler((globalConfig, registry, metaInfo) ->
+                        metaInfo.getJdbcType() == JdbcType.TINYINT
+                                ? DbColumnType.INTEGER : registry.getColumnType(metaInfo)))
+                .packageConfig(builder -> builder.parent("com.blog")
+                        .pathInfo(Map.of(OutputFile.xml, projectPath.resolve("src/main/resources/mapper").toString())))
+                .strategyConfig(builder -> builder.addInclude(tables.split("\\s*,\\s*"))
+                        .addTablePrefix("m_")
+                        .entityBuilder().enableLombok().enableChainModel().idType(IdType.AUTO)
+                        .serviceBuilder().formatServiceFileName("%sService")
+                        .controllerBuilder().enableRestStyle().enableHyphenStyle())
+                .templateEngine(new FreemarkerTemplateEngine())
+                .execute();
     }
 }

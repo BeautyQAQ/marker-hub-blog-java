@@ -30,9 +30,9 @@ spring:
       poolPreparedStatements: true
       maxPoolPreparedStatementPerConnectionSize: 20
       # 配置监控统计拦截的filters，去掉后监控界面sql无法统计，'wall'用于防火墙
-      filters: stat,wall,log4j
+      filters: stat,wall,slf4j
       # 通过connectProperties属性来打开mergeSql功能；慢SQL记录
-      connectionProperties: druid.stat.mergeSql\=true;druid.stat.slowSqlMillis\=5000
+      connectionProperties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=5000
 
   #文件上传相关设置
   servlet:
@@ -73,7 +73,7 @@ shiro-redis:
 blog:
   jwt:
     # 加密秘钥
-    secret: f4e2e52034348f86b67cde581c0f9eb5
+    secret: ooxsxrY2GJ8aa1NLYXr2XhkQIF/APS/ilVKUn/rpRbI3McLileKcaqBMYsgstIIZJsnNcB+KR5xDvaN9ZlCaig==
     # token有效时长，7天，单位秒
     expire: 604800
     header: token
