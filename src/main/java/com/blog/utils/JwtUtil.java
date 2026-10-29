@@ -12,6 +12,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 import java.util.Date;
+import java.util.UUID;
 
 /**
  * jwt工具类
@@ -38,6 +39,7 @@ public class JwtUtil {
         return Jwts.builder()
                 .header().type("JWT").and()
                 .subject(Long.toString(userId))
+                .id(UUID.randomUUID().toString())
                 .issuedAt(nowDate)
                 .expiration(expireDate)
                 .signWith(signingKey(), Jwts.SIG.HS512)
@@ -52,7 +54,7 @@ public class JwtUtil {
                     .parseSignedClaims(token)
                     .getPayload();
         }catch (JwtException | IllegalArgumentException e){
-            log.debug("validate is token error ", e);
+            log.debug("JWT validation failed: {}", e.getClass().getSimpleName());
             return null;
         }
     }

@@ -2,6 +2,8 @@ package com.blog;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.core.env.Profiles;
 
 /**
  * @author SZ-UserBDG7
@@ -9,6 +11,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class VueBlogApplication {
     public static void main(String[] args) {
-        SpringApplication.run(VueBlogApplication.class,args);
+        ConfigurableApplicationContext context = SpringApplication.run(VueBlogApplication.class,args);
+        if (context.getEnvironment().acceptsProfiles(Profiles.of("bootstrap-admin"))) {
+            context.close();
+        }
     }
 }

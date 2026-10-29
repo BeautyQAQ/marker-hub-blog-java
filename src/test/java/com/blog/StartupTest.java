@@ -1,6 +1,7 @@
 package com.blog;
 
 import com.blog.service.UserService;
+import com.blog.service.BlogService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -24,6 +25,9 @@ class StartupTest {
     @MockitoBean
     private UserService userService;
 
+    @MockitoBean
+    private BlogService blogService;
+
     @LocalServerPort
     private int port;
 
@@ -31,7 +35,7 @@ class StartupTest {
     void startsOnJava21AndServesTheExistingAnonymousRoute() throws Exception {
         try (HttpClient client = HttpClient.newHttpClient()) {
             HttpResponse<String> response = client.send(HttpRequest.newBuilder(
-                            URI.create("http://127.0.0.1:" + port + "/user/9223372036854775807"))
+                            URI.create("http://127.0.0.1:" + port + "/blogs"))
                     .GET().build(), HttpResponse.BodyHandlers.ofString());
             assertEquals(200, response.statusCode());
             verifyNoInteractions(dataSource);

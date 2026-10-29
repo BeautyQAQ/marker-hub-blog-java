@@ -1,57 +1,42 @@
 package com.blog.shiro;
 
-import cn.hutool.core.bean.BeanUtil;
-import com.blog.entity.User;
-import com.blog.service.UserService;
-import com.blog.utils.JwtUtil;
-import org.apache.shiro.authc.*;
+import com.blog.auth.AuthService;
+import com.blog.common.ApiException;
+import org.apache.shiro.authc.AuthenticationException;
+import org.apache.shiro.authc.AuthenticationInfo;
+import org.apache.shiro.authc.AuthenticationToken;
+import org.apache.shiro.authc.SimpleAuthenticationInfo;
 import org.apache.shiro.authz.AuthorizationInfo;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
-/**
- * @author SZ-UserBDG7
- */
 @Component
+@Profile("!bootstrap-admin")
 public class AccountRealm extends AuthorizingRealm {
+    private final AuthService auth;
 
-    @Autowired
-    private JwtUtil jwtUtil;
-
-    @Autowired
-    private UserService userService;
-
-    @Override
-    public boolean supports(AuthenticationToken token) {
-        return token instanceof JwtToken;
+    public AccountRealm(AuthService auth) {
+        this.auth = auth;
+        setCachingEnabled(false);
+        setAuthenticationCachingEnabled(false);
+        setAuthorizationCachingEnabled(false);
     }
 
     @Override
-    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
-        return null;
-    }
+    public boolean supports(AuthenticationToken token) { return token instanceof JwtToken; }
 
     @Override
-    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token) throws AuthenticationException {
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) { return null; }
 
-        JwtToken jwtToken = (JwtToken) token;
-
-        String userId = jwtUtil.getClaimByToken((String) jwtToken.getPrincipal()).getSubject();
-
-        User user = userService.getById(Long.valueOf(userId));
-        if (user == null) {
-            throw new UnknownAccountException("账户不存在");
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token) {
+        try {
+            AccountProfile profile = auth.authenticate((String) token.getCredentials());
+            return new SimpleAuthenticationInfo(profile, token.getCredentials(), getName());
+        } catch (ApiException expected) {
+            throw new AuthenticationException(expected.getMessage(), expected);
         }
-
-        if (user.getStatus() == -1) {
-            throw new LockedAccountException("账户已被锁定");
-        }
-
-        AccountProfile profile = new AccountProfile();
-        BeanUtil.copyProperties(user, profile);
-
-        return new SimpleAuthenticationInfo(profile, jwtToken.getCredentials(), getName());
     }
 }

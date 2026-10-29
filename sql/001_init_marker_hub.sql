@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS `marker-hub`.`m_user` (
   COLLATE = utf8mb4_unicode_ci
   COMMENT = '博客用户';
 
--- 文章状态是本次新约定，现有后端尚未实现其业务逻辑：
+-- 文章状态由后端校验并实现以下可见性约定：
 -- 0=草稿，1=已发布，-1=已删除（软删除）；公开查询必须限定 status=1。
 -- 新建默认为草稿，发布接口必须显式设置 status=1。
 -- 使用注释约定状态，状态合法性需由后端校验，不依赖旧版MySQL的CHECK。

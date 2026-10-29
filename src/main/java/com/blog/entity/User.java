@@ -9,6 +9,7 @@ import java.util.Date;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * <p>
@@ -35,6 +36,7 @@ public class User implements Serializable {
 
     private String email;
 
+    @JsonIgnore
     private String password;
 
     private Integer status;

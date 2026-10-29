@@ -9,6 +9,8 @@ import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.ScanResult;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -86,5 +88,14 @@ public final class JedisRedisManager implements IRedisManager, AutoCloseable {
     @Override
     public void close() {
         client.close();
+    }
+
+    /** Atomic fixed window; the first increment sets expiry so counters cannot live forever. */
+    public long incrementWindow(byte[] key, int seconds) {
+        byte[] script = ("local n=redis.call('INCR',KEYS[1]); "
+                + "if n==1 then redis.call('EXPIRE',KEYS[1],ARGV[1]); end; return n")
+                .getBytes(StandardCharsets.UTF_8);
+        return ((Number) client.eval(script, List.of(key),
+                List.of(Integer.toString(seconds).getBytes(StandardCharsets.US_ASCII)))).longValue();
     }
 }

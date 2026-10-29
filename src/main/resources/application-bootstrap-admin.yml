@@ -1,0 +1,9 @@
+spring:
+  main:
+    web-application-type: none
+shiro:
+  enabled: false
+  annotations:
+    enabled: false
+  web:
+    enabled: false

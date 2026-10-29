@@ -2,6 +2,9 @@ server:
   port: 8080
 
 spring:
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: false
   datasource:
     # 使用阿里的Druid连接池
     type: com.alibaba.druid.pool.DruidDataSource
@@ -68,7 +71,9 @@ mybatis-plus:
 shiro-redis:
   enabled: true
   redis-manager:
-    host: 101.201.142.43:6379
+    host: "192.168.20.5:6379"
+    password: "ssyhsup"
+    database: 0
 
 blog:
   jwt:
@@ -77,3 +82,7 @@ blog:
     # token有效时长，7天，单位秒
     expire: 604800
     header: token
+  cors:
+    allowed-origins: ${BLOG_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+  http:
+    max-request-bytes: 2097152
