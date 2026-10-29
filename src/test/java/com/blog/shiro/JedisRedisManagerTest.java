@@ -18,6 +18,7 @@ import java.io.Serializable;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -28,6 +29,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -36,7 +40,8 @@ class JedisRedisManagerTest {
     @Test
     void binaryValuesAndTtlUseTheRealJedisProtocol() throws Exception {
         try (RespServer server = new RespServer();
-             JedisRedisManager redis = new JedisRedisManager(server.address(), "", 3, 2000)) {
+             JedisRedisManager redis = new JedisRedisManager(server.address(), "", 3, 2000);
+             AutoCloseable teardown = server::beginTeardown) {
             byte[] key = {0, 13, 10, (byte) 255};
             byte[] value = {(byte) 254, 0, 13, 10};
             assertArrayEquals(value, redis.set(key, value, 15));
@@ -56,7 +61,8 @@ class JedisRedisManagerTest {
     @Test
     void scanTraversesAllPagesAndDeduplicatesBinaryKeys() throws Exception {
         try (RespServer server = new RespServer();
-             JedisRedisManager redis = new JedisRedisManager(server.address(), null, 0, 2000)) {
+             JedisRedisManager redis = new JedisRedisManager(server.address(), null, 0, 2000);
+             AutoCloseable teardown = server::beginTeardown) {
             assertEquals(2, redis.keys(bytes("scan:*")).size());
             assertEquals(2L, redis.dbSize(bytes("scan:*")));
             assertEquals(4, Collections.frequency(server.commands, "SCAN"));
@@ -67,7 +73,8 @@ class JedisRedisManagerTest {
     @Test
     void legacyRedisCacheAndSessionDaoLinkAndRoundTripWithShiro3() throws Exception {
         try (RespServer server = new RespServer();
-             JedisRedisManager redis = new JedisRedisManager(server.address(), null, 0, 2000)) {
+             JedisRedisManager redis = new JedisRedisManager(server.address(), null, 0, 2000);
+             AutoCloseable teardown = server::beginTeardown) {
             RedisCacheManager cacheManager = new RedisCacheManager();
             cacheManager.setRedisManager(redis);
             Cache<String, String> cache = cacheManager.getCache("compatibility");
@@ -94,6 +101,34 @@ class JedisRedisManagerTest {
         }
     }
 
+    @Test
+    void idlePeerResetDuringTeardownIsAnExpectedDisconnect() throws Exception {
+        try (RespServer server = new RespServer();
+             Socket socket = new Socket("127.0.0.1", server.server.getLocalPort());
+             AutoCloseable teardown = server::beginTeardown) {
+            socket.getOutputStream().write(bytes("*1\r\n$4\r\nPING\r\n"));
+            socket.getOutputStream().flush();
+            assertEquals("+PONG\r\n", new String(socket.getInputStream().readNBytes(7), StandardCharsets.US_ASCII));
+            socket.setSoLinger(true, 0); // Force RST instead of relying on platform-specific close behavior.
+        }
+    }
+
+    @Test
+    void interruptedRespFrameStillFailsEvenDuringTeardown() {
+        IOException error = assertThrows(IOException.class, () -> {
+            try (RespServer server = new RespServer();
+                 Socket socket = new Socket("127.0.0.1", server.server.getLocalPort());
+                 AutoCloseable teardown = server::beginTeardown) {
+                socket.getOutputStream().write(bytes("*1\r\n$4\r\nPI"));
+                socket.getOutputStream().flush();
+                assertTrue(server.frameStarted.await(2, TimeUnit.SECONDS));
+                socket.shutdownOutput();
+            }
+        });
+        assertEquals("RESP fixture failed", error.getMessage());
+        assertInstanceOf(IOException.class, error.getCause());
+    }
+
     private static byte[] bytes(String value) {
         return value.getBytes(StandardCharsets.UTF_8);
     }
@@ -102,6 +137,10 @@ class JedisRedisManagerTest {
     private static final class RespServer implements AutoCloseable {
         private final ServerSocket server;
         private final List<Socket> sockets = new CopyOnWriteArrayList<>();
+        private final List<Thread> workers = new CopyOnWriteArrayList<>();
+        private final Thread acceptor;
+        private final AtomicBoolean tearingDown = new AtomicBoolean();
+        private final CountDownLatch frameStarted = new CountDownLatch(1);
         private final Map<ByteBuffer, byte[]> values = new LinkedHashMap<>();
         private final Map<ByteBuffer, Long> expirations = new ConcurrentHashMap<>();
         private final List<String> commands = new CopyOnWriteArrayList<>();
@@ -109,14 +148,16 @@ class JedisRedisManagerTest {
 
         RespServer() throws IOException {
             server = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"));
-            Thread.startVirtualThread(() -> {
+            acceptor = Thread.startVirtualThread(() -> {
                 while (!server.isClosed()) {
                     try {
                         Socket socket = server.accept();
                         sockets.add(socket);
-                        Thread.startVirtualThread(() -> serve(socket));
+                        Thread worker = Thread.ofVirtual().unstarted(() -> serve(socket));
+                        workers.add(worker);
+                        worker.start();
                     } catch (IOException e) {
-                        if (!server.isClosed()) {
+                        if (!tearingDown.get()) {
                             failure.compareAndSet(null, e);
                         }
                     }
@@ -137,10 +178,9 @@ class JedisRedisManagerTest {
                     respond(command, out);
                     out.flush();
                 }
-            } catch (IOException e) {
-                if (!server.isClosed()) {
-                    failure.compareAndSet(null, e);
-                }
+            } catch (IOException | RuntimeException e) {
+                // Framing, response-writing and active-request failures remain failures during teardown.
+                failure.compareAndSet(null, e);
             }
         }
 
@@ -195,14 +235,25 @@ class JedisRedisManagerTest {
             }
         }
 
-        private static List<byte[]> readCommand(InputStream in) throws IOException {
-            int marker = in.read();
+        private List<byte[]> readCommand(InputStream in) throws IOException {
+            int marker;
+            try {
+                marker = in.read();
+            } catch (SocketException e) {
+                // An idle peer may send RST when the client pool closes (notably on Linux).
+                // This exception is accepted only after explicit teardown and before any new frame.
+                if (tearingDown.get()) {
+                    return null;
+                }
+                throw e;
+            }
             if (marker == -1) {
                 return null;
             }
             if (marker != '*') {
                 throw new IOException("Expected RESP command array");
             }
+            frameStarted.countDown();
             int count = Integer.parseInt(line(in));
             List<byte[]> parts = new ArrayList<>(count);
             for (int i = 0; i < count; i++) {
@@ -246,12 +297,34 @@ class JedisRedisManagerTest {
 
         @Override
         public void close() throws IOException {
+            beginTeardown();
             server.close();
+            awaitTermination(acceptor);
             for (Socket socket : sockets) {
                 socket.close();
             }
+            for (Thread worker : workers) {
+                awaitTermination(worker);
+            }
             if (failure.get() != null) {
                 throw new IOException("RESP fixture failed", failure.get());
+            }
+        }
+
+        private void beginTeardown() {
+            // Test resources declare this last, so it runs before the Redis client/socket closes.
+            tearingDown.set(true);
+        }
+
+        private void awaitTermination(Thread thread) {
+            try {
+                thread.join(2000);
+                if (thread.isAlive()) {
+                    failure.compareAndSet(null, new IOException("RESP fixture thread did not terminate"));
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                failure.compareAndSet(null, e);
             }
         }
     }
