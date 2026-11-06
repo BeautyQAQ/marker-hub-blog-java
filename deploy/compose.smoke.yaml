@@ -1,0 +1,54 @@
+# Disposable integration environment. Always use a unique project name.
+# Never apply this override to an existing deployment.
+services:
+  web:
+    networks:
+      - default
+      - smoke-ingress
+
+  api:
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:mysql://smoke-db:3306/marker-hub?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&sessionVariables=time_zone=%27%2B00%3A00%27&connectTimeout=3000&socketTimeout=5000"
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${SMOKE_DB_PASSWORD:?Set a temporary database password}
+      SHIRO_REDIS_REDIS_MANAGER_HOST: smoke-redis:6379
+      SHIRO_REDIS_REDIS_MANAGER_PASSWORD: ""
+      SHIRO_REDIS_REDIS_MANAGER_DATABASE: "0"
+      BLOG_JWT_SECRET: ${SMOKE_JWT_SECRET:?Set a temporary JWT secret of at least 64 bytes}
+    depends_on:
+      smoke-db:
+        condition: service_healthy
+      smoke-redis:
+        condition: service_healthy
+
+  smoke-db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${SMOKE_DB_PASSWORD}
+      MYSQL_DATABASE: marker-hub
+    volumes:
+      - smoke-db:/var/lib/mysql
+      - ../sql/001_init_marker_hub.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysql --host=127.0.0.1 --protocol=TCP -uroot -e 'SELECT 1 FROM `marker-hub`.m_user LIMIT 0'"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 60
+
+  smoke-redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  smoke-db:
+
+networks:
+  default:
+    internal: true
+  smoke-ingress:

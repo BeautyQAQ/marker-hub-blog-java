@@ -11,6 +11,7 @@ let token = ''
 
 async function request(path, { method = 'GET', body, authenticated = false, authToken, status = 200 } = {}) {
   const headers = { Accept: 'application/json' }
+  if (process.env.BLOG_SMOKE_ORIGIN) headers.Origin = process.env.BLOG_SMOKE_ORIGIN
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   const authorization = authToken ?? (authenticated ? token : '')
   if (authorization) headers.Authorization = authorization

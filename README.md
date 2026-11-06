@@ -20,6 +20,12 @@ java -jar target/vue-blog-1.0-SNAPSHOT.jar
 
 后端默认监听 8080。数据库和 Redis 须可连接；普通启动不会创建账号或修改已有账号。
 
+## Docker / NAS 部署
+
+仓库提供包含测试的多阶段 Dockerfile，以非 root 用户运行。配套前端与后端的 Compose、Nginx、健康检查、版本回滚及临时验收清理流程见 [deploy/README.md](deploy/README.md)。生产部署复用现有 NAS MySQL / Redis；`deploy/smoke.sh` 使用独立临时依赖，成功或失败退出后均清理本次资源。
+
+`GET /health/live` 只检查 HTTP 服务存活；`GET /health/ready` 只读检查数据库与 Redis，两者均正常时返回 200 / `{"status":"UP"}`，依赖异常时返回 503 / `{"status":"DOWN"}`。健康接口不返回连接配置或异常详情。
+
 当前依赖为 Spring Boot 4.1.2、Shiro 3.0.1、MyBatis-Plus 3.5.18、Druid 1.2.28 和 JJWT 0.13.0。Servlet API 已迁移为 Jakarta。分页使用 `MybatisPlusInterceptor` 与 `PaginationInnerInterceptor`；代码生成器使用 `FastAutoGenerator`，保留 `Date` 和 `Integer` 状态字段映射。
 
 Redis 使用 DBX 的 `nas-redis` 实例，对应 `192.168.20.5:6379`、逻辑库 0。连接和认证信息保存在 `application.yml` 的 `shiro-redis.redis-manager` 下，可通过对应 Spring 环境变量覆盖。登录令牌、登录限流和 Shiro 适配器均使用 `marker-hub:` 键前缀，可与其他应用共享 Redis；无需清空数据库。
@@ -61,7 +67,7 @@ CORS 默认允许 `http://localhost:5173` 和 `http://127.0.0.1:5173`，并向�
 
 ## 验证
 
-`mvn verify` 当前执行 36 个测试，覆盖 JWT、Redis 协议兼容及许可记录、真实 HTTP 登录/退出/锁定/越权/CORS/请求大小、Shiro 注解拦截、显式非 Web 账号初始化，以及 H2 上的文章 SQL 和软删除。测试使用隔离数据源和本地测试替身，不连接配置中的 MySQL 或 Redis。GitHub Actions 在 main 推送和 PR 中使用 Temurin 21 执行这些检查。
+`mvn verify` 当前执行 40 个测试，覆盖健康接口与依赖失败、JWT、Redis 协议兼容及许可记录、真实 HTTP 登录/退出/锁定/越权/CORS/请求大小、Shiro 注解拦截、显式非 Web 账号初始化，以及 H2 上的文章 SQL 和软删除。测试使用隔离数据源和本地测试替身，不连接配置中的 MySQL 或 Redis。GitHub Actions 在 main 推送和 PR 中使用 Temurin 21 执行这些检查。
 
 可选的实际服务验收脚本使用 Node.js 24：设置 `BLOG_API_URL`（默认 `http://127.0.0.1:8080`）、`BLOG_SMOKE_USERNAME`（默认 `admin`）和 `BLOG_SMOKE_PASSWORD` 环境变量后运行：
 

@@ -41,6 +41,10 @@ public final class JedisRedisManager implements IRedisManager, AutoCloseable {
         return key == null ? null : client.get(key);
     }
 
+    public String ping() {
+        return client.ping();
+    }
+
     @Override
     public byte[] set(byte[] key, byte[] value, int expire) {
         if (key == null) {

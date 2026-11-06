@@ -41,6 +41,8 @@ public class JwtFilter extends AuthenticatingFilter {
     @Override
     protected boolean onAccessDenied(ServletRequest servletRequest, ServletResponse response) throws Exception {
         HttpServletRequest request = (HttpServletRequest) servletRequest;
+        if ("GET".equals(request.getMethod()) &&
+                ("/health/live".equals(path(request)) || "/health/ready".equals(path(request)))) return true;
         // A stale browser token must not prevent a fresh login.
         if ("POST".equals(request.getMethod()) && "/login".equals(path(request))) return true;
         try {

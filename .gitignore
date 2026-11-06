@@ -1,5 +1,8 @@
 /target/
 .mvn
+deploy/.env
+deploy/.env.runtime
+deploy/.env.smoke
 
 ### STS ###
 .apt_generated
